@@ -1,10 +1,11 @@
+{-# LANGUAGE BangPatterns #-}
+
 --reads the AMQP xml spec file and builds the "Generated.hs" module
 --this is pretty much a BIG HACK
 
-    
 import Text.XML.Light
-import Text.XML.Light.Input
-import Text.XML.Light.Proc
+
+import System.Environment
 
 import qualified Data.Map as M
 import qualified Data.List as L
@@ -27,7 +28,8 @@ fieldType domainMap (DomainField _ domain) = fromJust $ M.lookup domain domainMa
 
     
 main = do
-    spec <- readFile "amqp0-8.xml"
+    [ specFile ] <- getArgs
+    spec <- readFile specFile
     let parsed = parseXML spec
     let !(Elem e) = parsed!!2
     

@@ -313,6 +313,7 @@ consumeMsgs chan queueName ack callback = do
         (ackToBool ack) -- no_ack
         False -- exclusive; Request exclusive consumer access, meaning only this consumer can access the queue.
         True -- nowait                     
+        (FieldTable M.empty)
         )
     return newConsumerTag
 
@@ -607,10 +608,10 @@ openConnection' host port vhost loginName loginPassword = do
     connect sock (SockAddrInet port addr)
     NB.send sock $ toStrict $ BPut.runPut $ do
         BPut.putByteString $ BS.pack "AMQP"
+        BPut.putWord8 0
+        BPut.putWord8 0
+        BPut.putWord8 9
         BPut.putWord8 1
-        BPut.putWord8 1 --TCP/IP
-        BPut.putWord8 9 --Major Version
-        BPut.putWord8 1 --Minor Version
         
     
     -- S: connection.start
@@ -909,7 +910,7 @@ openChannel c = do
     --add new channel to connection's channel map
     modifyMVar_ (connChannels c) (\oldMap -> return $ IM.insert newChannelID (newChannel, thrID) oldMap)
      
-    (SimpleMethod Channel_open_ok) <- request newChannel (SimpleMethod (Channel_open (ShortString "")))
+    (SimpleMethod (Channel_open_ok _)) <- request newChannel (SimpleMethod (Channel_open (ShortString "")))
     return newChannel        
 
   

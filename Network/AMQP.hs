@@ -90,6 +90,7 @@ module Network.AMQP (
     getMsg,
     rejectMsg,
     recoverMsgs,
+    qos,
 
     ackMsg,
     ackEnv,
@@ -138,7 +139,6 @@ import           Network.AMQP.Types
 
 {-
 TODO:
-- basic.qos
 - handle basic.return
 - connection.secure
 - connection.redirect
@@ -397,6 +397,14 @@ recoverMsgs chan requeue =
     writeAssembly chan $ (SimpleMethod (Basic_recover
         requeue -- requeue
         ))
+
+
+-- | @qos chan prefetchSize prefetchCount global@ specifies quality of service.
+qos :: Channel -> LongInt -> ShortInt -> Bool -> IO ()
+qos chan prefetchSize prefetchCount global = do
+    (SimpleMethod Basic_qos_ok) <- request chan $ SimpleMethod $ Basic_qos prefetchSize prefetchCount global
+    return ()
+
 
 ------------------- TRANSACTIONS (TX) --------------------------
 

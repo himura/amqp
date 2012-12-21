@@ -21,16 +21,12 @@ newLock = do
     return $ Lock killed b
 
 openLock :: Lock -> IO ()
-openLock (Lock _killed b) = do
-    void $ tryPutMVar b ()
+openLock (Lock _killed b) = void $ tryPutMVar b ()
 
 closeLock :: Lock -> IO ()
-closeLock (Lock a b) = do
+closeLock (Lock a b) =
     withMVar a $ \killed ->
-        if killed
-            then return ()
-            else tryTakeMVar b >> return ()
-    return ()
+        unless killed $ void $ tryTakeMVar b
 
 waitLock :: Lock -> IO ()
 waitLock (Lock _killed b) = readMVar b

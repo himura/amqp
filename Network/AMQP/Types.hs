@@ -33,7 +33,7 @@ import qualified Data.Text.Encoding         as T
 
 -- performs runGet on a bytestring until the string is empty
 readMany :: (Show t, Binary t) => BL.ByteString -> [t]
-readMany str = runGet (readMany' [] 0) str
+readMany = runGet (readMany' [] 0)
 
 readMany' :: Binary t => [t] -> Int -> Get [t]
 readMany' _ 1000 = error "readMany overflow"
@@ -45,7 +45,7 @@ readMany' acc overflow = do
         else return (x:acc)
 
 putMany :: Binary a => [a] -> PutM ()
-putMany x = mapM_ put x
+putMany = mapM_ put
 
 -- Lowlevel Types
 type Octet = Word8
@@ -102,7 +102,7 @@ instance Binary FieldTable where
                 let !fields = readMany fvp
 
                 return $ FieldTable $ M.fromList $ map (\(ShortString a, b) -> (a,b)) fields
-            else return $ FieldTable $ M.empty
+            else return $ FieldTable M.empty
 
     put (FieldTable fvp) = do
         let bytes = runPut (putMany $ map (\(a,b) -> (ShortString a, b)) $ M.toList fvp) :: BL.ByteString
@@ -168,7 +168,7 @@ instance Binary FieldValue where
     put (FVString x) = put 'S' >> put (LongString x)
     put (FVFieldArray x) = do
         put 'A'
-        if length x == 0
+        if null x
             then put (0 :: Int32)
             else do
                 let bytes = runPut (putMany x) :: BL.ByteString

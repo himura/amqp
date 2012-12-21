@@ -89,6 +89,7 @@ module Network.AMQP (
     publishMsg,
     getMsg,
     rejectMsg,
+    rejectEnv,
     recoverMsgs,
     qos,
 
@@ -113,6 +114,7 @@ import           Data.Binary.Get
 import           Data.Binary.Put            as BPut
 import qualified Data.ByteString.Char8      as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
+import           Data.Default
 import qualified Data.Foldable              as F
 import           Data.Int
 import qualified Data.IntMap                as IM
@@ -158,6 +160,10 @@ data ExchangeOpts = ExchangeOpts
                     exchangeAutoDelete :: Bool, -- ^ (default 'False'); If set, the exchange is deleted when all queues have finished using it.
                     exchangeInternal   :: Bool -- ^ (default 'False'); If set, the exchange may not be used directly by publishers, but only when bound to other exchanges. Internal exchanges are used to construct wiring that is not visible to applications.
                 }
+                deriving Show
+
+instance Default ExchangeOpts where
+    def = newExchange
 
 -- | an 'ExchangeOpts' with defaults set; you must override at least the 'exchangeName' and 'exchangeType' fields.
 newExchange :: ExchangeOpts
@@ -203,6 +209,10 @@ data QueueOpts = QueueOpts
                 queueExclusive  :: Bool, -- ^ (default 'False'); Exclusive queues may only be consumed from by the current connection. Setting the 'exclusive' flag always implies 'auto-delete'.
                 queueAutoDelete :: Bool -- ^ (default 'False'); If set, the queue is deleted when all consumers have finished using it. Last consumer can be cancelled either explicitly or because its channel is closed. If there was no consumer ever on the queue, it won't be deleted.
              }
+             deriving Show
+
+instance Default QueueOpts where
+    def = newQueue
 
 -- | a 'QueueOpts' with defaults set; you should override at least 'queueName'.
 newQueue :: QueueOpts
@@ -273,7 +283,7 @@ deleteQueue chan queueName = do
 type ConsumerTag = Text
 
 -- | specifies whether you have to acknowledge messages that you receive from 'consumeMsgs' or 'getMsg'. If you use 'Ack', you have to call 'ackMsg' or 'ackEnv' after you have processed a message, otherwise it might be delivered again in the future
-data Ack = Ack | NoAck
+data Ack = Ack | NoAck deriving (Show, Eq)
 
 ackToBool :: Ack -> Bool
 ackToBool Ack = False
@@ -390,6 +400,12 @@ rejectMsg chan deliveryTag requeue =
         requeue -- requeue
         ))
 
+-- | Reject a single message. This is a wrapper for 'rejectMsg' in case you have the 'Envelope' at hand.
+rejectEnv :: Envelope
+          -> Bool -- ^ requeue
+          -> IO ()
+rejectEnv env requeue = rejectMsg (envChannel env) (envDeliveryTag env) requeue
+
 -- | @recoverMsgs chan requeue@ asks the broker to redeliver all messages that were received but not acknowledged on the specified channel.
 --If @requeue==False@, the message will be redelivered to the original recipient. If @requeue==True@, the server will attempt to requeue the message, potentially then delivering it to an alternative subscriber.
 recoverMsgs :: Channel -> Bool -> IO ()
@@ -458,7 +474,7 @@ data Envelope = Envelope
 
 data DeliveryMode = Persistent -- ^ the message will survive server restarts (if the queue is durable)
                   | NonPersistent -- ^ the message may be lost after server restarts
-    deriving Show
+    deriving (Show, Eq)
 
 deliveryModeToInt NonPersistent = 1
 deliveryModeToInt Persistent = 2
@@ -478,6 +494,9 @@ data Message = Message {
                 msgHeaders       :: Maybe FieldTable
                 }
     deriving Show
+
+instance Default Message where
+    def = newMsg
 
 -- | a 'Msg' with defaults set; you should override at least 'msgBody'
 newMsg :: Message

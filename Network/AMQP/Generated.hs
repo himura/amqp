@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -w #-}
+
 module Network.AMQP.Generated where
 
 import Network.AMQP.Types

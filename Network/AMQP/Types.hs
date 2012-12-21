@@ -19,33 +19,32 @@ module Network.AMQP.Types
      where
 
 import           Control.Applicative
-import           Control.Monad
 import           Data.Binary
 import           Data.Binary.Get
 import           Data.Binary.IEEE754
 import           Data.Binary.Put
-import qualified Data.Binary.Put               as BPut
-import qualified Data.ByteString.Char8         as BS
-import qualified Data.ByteString.Lazy.Char8    as BL
-import qualified Data.ByteString.Lazy.Internal as BL
+import qualified Data.ByteString.Char8      as BS
+import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Char
 import           Data.Int
-import qualified Data.Map                      as M
-import           Data.Text                     (Text)
-import qualified Data.Text                     as T
-import qualified Data.Text.Encoding            as T
+import qualified Data.Map                   as M
+import           Data.Text                  (Text)
+import qualified Data.Text.Encoding         as T
 
 -- performs runGet on a bytestring until the string is empty
 readMany :: (Show t, Binary t) => BL.ByteString -> [t]
 readMany str = runGet (readMany' [] 0) str
+
+readMany' :: Binary t => [t] -> Int -> Get [t]
 readMany' _ 1000 = error "readMany overflow"
 readMany' acc overflow = do
     x <- get
-    rem <- remaining
-    if rem > 0
+    remain <- remaining
+    if remain > 0
         then readMany' (x:acc) (overflow+1)
         else return (x:acc)
 
+putMany :: Binary a => [a] -> PutM ()
 putMany x = mapM_ put x
 
 -- Lowlevel Types

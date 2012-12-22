@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 -- |
 --
@@ -116,9 +117,7 @@ import qualified Data.ByteString.Char8      as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import           Data.Default
 import qualified Data.Foldable              as F
-import           Data.Int
 import qualified Data.IntMap                as IM
-import           Data.IORef
 import qualified Data.Map                   as M
 import           Data.Maybe
 import qualified Data.Sequence              as Seq
@@ -128,7 +127,6 @@ import           Data.Typeable
 
 import           Control.Concurrent
 import qualified Control.Exception          as CE
-import           Control.Monad
 
 import           Network.BSD
 import           Network.Socket
@@ -476,11 +474,14 @@ data DeliveryMode = Persistent -- ^ the message will survive server restarts (if
                   | NonPersistent -- ^ the message may be lost after server restarts
     deriving (Show, Eq)
 
+deliveryModeToInt :: DeliveryMode -> Octet
 deliveryModeToInt NonPersistent = 1
 deliveryModeToInt Persistent = 2
 
+intToDeliveryMode :: Octet -> DeliveryMode
 intToDeliveryMode 1 = NonPersistent
 intToDeliveryMode 2 = Persistent
+intToDeliveryMode _ = error "intToDeliveryMode"
 
 -- | An AMQP message
 data Message = Message {
@@ -840,6 +841,7 @@ channelReceiver chan = do
         print "BASIC.RETURN not implemented"
 
 -- closes the channel internally; but doesn't tell the server
+closeChannel' :: Channel -> Text -> IO ()
 closeChannel' c reason = do
     modifyMVar_ (connChannels $ connection c) $ \old -> return $ IM.delete (fromIntegral $ channelID c) old
     -- mark channel as closed
@@ -965,6 +967,7 @@ request chan m = do
 
 -- this throws an AMQPException based on the status of the connection and the channel
 -- if both connection and channel are closed, it will throw a ConnectionClosedException
+throwMostRelevantAMQPException :: Channel -> IO a
 throwMostRelevantAMQPException chan = do
     cc <- readMVar $ connClosed $ connection chan
     case cc of

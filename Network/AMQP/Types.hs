@@ -116,9 +116,14 @@ data FieldValue = FVBool Bool
                 | FVInt16 Int16
                 | FVInt32 Int32
                 | FVInt64 Int64
+                | FVUInt8 Word8
+                | FVUInt16 Word16
+                | FVUInt32 Word32
+                | FVUInt64 Word64
                 | FVFloat Float
                 | FVDouble Double
                 | FVDecimal DecimalValue
+                | FVShortString Text
                 | FVString Text
                 | FVFieldArray [FieldValue]
                 | FVTimestamp Timestamp
@@ -133,12 +138,19 @@ instance Binary FieldValue where
         case chr $ fromIntegral fieldType of
             't' -> FVBool <$> get
             'b' -> FVInt8 <$> get
-            's' -> FVInt16 <$> get
+            'B' -> FVUInt8 <$> get
+            'U' -> FVInt16 <$> get
+            'u' -> FVUInt16 <$> get
             'I' -> FVInt32 <$> get
-            'l' -> FVInt64 <$> get
+            'i' -> FVUInt32 <$> get
+            'L' -> FVInt64 <$> get
+            'l' -> FVUInt64 <$> get
             'f' -> FVFloat <$> getFloat32be
             'd' -> FVDouble <$> getFloat64be
             'D' -> FVDecimal <$> get
+            's' -> do
+                ShortString x <- get
+                return $ FVShortString x
             'S' -> do
                 LongString x <- get :: Get LongString
                 return $ FVString x
@@ -156,15 +168,21 @@ instance Binary FieldValue where
             'x' -> do
                 len <- get :: Get Word32
                 FVByteArray <$> getByteString (fromIntegral len)
+            ch -> fail $ "unexpected field-value identifer '" ++ ch:"'"
 
     put (FVBool x) = put 't' >> put x
     put (FVInt8 x) = put 'b' >> put x
-    put (FVInt16 x) = put 's' >> put x
+    put (FVUInt8 x) = put 'B' >> put x
+    put (FVInt16 x) = put 'U' >> put x
+    put (FVUInt16 x) = put 'u' >> put x
     put (FVInt32 x) = put 'I' >> put x
+    put (FVUInt32 x) = put 'i' >> put x
     put (FVInt64 x) = put 'l' >> put x
+    put (FVUInt64 x) = put 'L' >> put x
     put (FVFloat x) = put 'f' >> putFloat32be x
     put (FVDouble x) = put 'd' >> putFloat64be x
     put (FVDecimal x) = put 'D' >> put x
+    put (FVShortString x) = put 's' >> put (ShortString x)
     put (FVString x) = put 'S' >> put (LongString x)
     put (FVFieldArray x) = do
         put 'A'

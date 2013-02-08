@@ -54,8 +54,8 @@ module Network.AMQP (
 
     -- * Connection
     Connection,
+    ConnectionOpts(..),
     openConnection,
-    openConnection',
     closeConnection,
     addConnectionClosedHandler,
 
@@ -586,19 +586,41 @@ connectionReceiver conn = do
                 Just c -> writeChan (inQueue $ fst c) payload
                 Nothing -> print $ "ERROR: channel not open "++(show chanID)
 
--- | @openConnection hostname virtualHost loginName loginPassword@ opens a connection to an AMQP server running on @hostname@.
--- @virtualHost@ is used as a namespace for AMQP resources (default is \"/\"), so different applications could use multiple virtual hosts on the same AMQP server.
+-- | A record that contains the fields needed when connecting a broker.
+--
+-- It is recommended to not use the ConnectionOpts data constructor directly.
+-- Instead use 'def' and update it with record syntax.
+-- For example to connect to a vhost \"example\" running on localhost and listening to the default port:
+--
+-- @
+-- openConnection $ def { connectionVHost = \"example\" }
+-- @
+data ConnectionOpts = ConnectionOpts
+    { connectionHost :: String -- ^ (default \"127.0.0.1\"); host name
+    , connectionPort :: PortNumber -- ^ (default 5672); port
+    , connectionVHost :: Text
+      -- ^ (default \"/\"); @connectionVHost@ is used as a namespace for AMQP resources,
+      -- so different applications could use multiple virtual hosts on the same AMQP server.
+    , connectionUser :: Text   -- ^ (default \"guest\"); user name
+    , connectionPassword :: Text -- ^ (default \"guest\"); password
+    } deriving (Show, Eq)
+
+instance Default ConnectionOpts where
+    def = ConnectionOpts
+          { connectionHost = "127.0.0.1"
+          , connectionPort = 5672
+          , connectionVHost = "/"
+          , connectionUser = "guest"
+          , connectionPassword = "guest"
+          }
+
+-- | @openConnection settings@ opens a connection to an AMQP server running on @hostname@.
 --
 -- You must call 'closeConnection' before your program exits to ensure that all published messages are received by the server.
 --
 -- NOTE: If the login name, password or virtual host are invalid, this method will throw a 'ConnectionClosedException'. The exception will not contain a reason why the connection was closed, so you'll have to find out yourself.
-openConnection :: String -> Text -> Text -> Text -> IO Connection
-openConnection host vhost loginName loginPassword =
-  openConnection' host 5672 vhost loginName loginPassword
-
--- | same as 'openConnection' but allows you to specify a non-default port-number as the 2nd parameter
-openConnection' :: String -> PortNumber -> Text -> Text -> Text -> IO Connection
-openConnection' host port vhost loginName loginPassword = do
+openConnection :: ConnectionOpts -> IO Connection
+openConnection (ConnectionOpts host port vhost loginName loginPassword) = do
     proto <- getProtocolNumber "tcp"
     sock <- socket AF_INET Stream proto
     addr <- inet_addr host

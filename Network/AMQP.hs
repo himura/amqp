@@ -206,24 +206,37 @@ deleteExchange chan exchangeName = do
 
 -- | A record that contains the fields needed when creating a new queue using 'declareQueue'. The default values apply when you use 'newQueue'.
 data QueueOpts = QueueOpts
-             {
-                --must be set
-                queueName       :: Text, -- ^ (default \"\"); the name of the queue; if left empty, the server will generate a new name and return it from the 'declareQueue' method
-
-                --optional
-                queuePassive    :: Bool, -- ^ (default 'False'); If set, the server will not create the queue.  The client can use this to check whether a queue exists without modifying the server state.
-                queueDurable    :: Bool, -- ^ (default 'True'); If set when creating a new queue, the queue will be marked as durable. Durable queues remain active when a server restarts. Non-durable queues (transient queues) are purged if/when a server restarts. Note that durable queues do not necessarily hold persistent messages, although it does not make sense to send persistent messages to a transient queue.
-                queueExclusive  :: Bool, -- ^ (default 'False'); Exclusive queues may only be consumed from by the current connection. Setting the 'exclusive' flag always implies 'auto-delete'.
-                queueAutoDelete :: Bool -- ^ (default 'False'); If set, the queue is deleted when all consumers have finished using it. Last consumer can be cancelled either explicitly or because its channel is closed. If there was no consumer ever on the queue, it won't be deleted.
-             }
-             deriving Show
+    { queueName       :: Text
+      -- ^ (default \"\"); the name of the queue; if left empty,
+      -- the server will generate a new name and return it from the 'declareQueue' method
+    , queuePassive    :: Bool
+      -- ^ (default 'False'); If set, the server will not create the queue.
+      -- The client can use this to check whether a queue exists without modifying the server state.
+    , queueDurable    :: Bool
+      -- ^ (default 'True'); If set when creating a new queue, the queue will be marked as durable.
+      -- Durable queues remain active when a server restarts.
+      -- Non-durable queues (transient queues) are purged if/when a server restarts.
+      -- Note that durable queues do not necessarily hold persistent messages,
+      -- although it does not make sense to send persistent messages to a transient queue.
+    , queueExclusive  :: Bool
+      -- ^ (default 'False'); Exclusive queues may only be consumed from by the current connection.
+      -- Setting the 'exclusive' flag always implies 'auto-delete'.
+    , queueAutoDelete :: Bool
+      -- ^ (default 'False'); If set, the queue is deleted when all consumers have finished using it.
+      -- Last consumer can be cancelled either explicitly or because its channel is closed.
+      -- If there was no consumer ever on the queue, it won't be deleted.
+    , queueArguments :: FieldTable
+      -- ^ (default empty); A set of arguments for the declaration.
+      -- The syntax and semantics of these arguments depends on the server implementation.
+    }
+    deriving Show
 
 instance Default QueueOpts where
     def = newQueue
 
 -- | a 'QueueOpts' with defaults set; you should override at least 'queueName'.
 newQueue :: QueueOpts
-newQueue = QueueOpts "" False True False False
+newQueue = QueueOpts "" False True False False (FieldTable (M.fromList []))
 
 -- | creates a new queue on the AMQP server; can be used like this: @declareQueue channel newQueue {queueName = \"myQueue\"}@.
 --
@@ -240,7 +253,8 @@ declareQueue chan queue = do
             (queueExclusive queue)
             (queueAutoDelete queue)
             False -- no-wait; true means no answer from server
-            (FieldTable (M.fromList []))))
+            (queueArguments queue)
+            ))
 
     return (qName, fromIntegral messageCount, fromIntegral consumerCount)
 

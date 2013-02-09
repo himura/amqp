@@ -64,12 +64,15 @@ module Network.AMQP (
     openChannel,
 
     -- * Exchanges
+    ExchangeName,
     ExchangeOpts(..),
     newExchange,
     declareExchange,
     deleteExchange,
 
     -- * Queues
+    QueueName,
+    RoutingKey,
     QueueOpts(..),
     newQueue,
     declareQueue,
@@ -146,12 +149,15 @@ TODO:
 
 ----- EXCHANGE -----
 
+-- | exchange name
+type ExchangeName = Text
+
 -- | A record that contains the fields needed when creating a new exhange using 'declareExchange'. The default values apply when you use 'newExchange'.
 data ExchangeOpts = ExchangeOpts
-    { exchangeName       :: Text -- ^ (must be set); the name of the exchange
+    { exchangeName       :: ExchangeName -- ^ (must be set); the name of the exchange
     , exchangeType       :: Text -- ^ (must be set); the type of the exchange (\"fanout\", \"direct\", \"topic\", \"headers\")
 
-    -- optional
+      -- optional
     , exchangePassive    :: Bool
       -- ^ (default 'False'); If set, the server will not create the exchange.
       -- The client can use this to check whether an exchange exists without modifying the server state.
@@ -192,7 +198,7 @@ declareExchange chan exchg = do
     return ()
 
 -- | deletes the exchange with the provided name
-deleteExchange :: Channel -> Text -> IO ()
+deleteExchange :: Channel -> ExchangeName -> IO ()
 deleteExchange chan exchangeName = do
     (SimpleMethod Exchange_delete_ok) <- request chan (SimpleMethod (Exchange_delete
         1 -- ticket; ignored by rabbitMQ
@@ -204,9 +210,16 @@ deleteExchange chan exchangeName = do
 
 ----- QUEUE -----
 
+-- | queue name
+type QueueName = Text
+
+-- | The routing key is used for routing messages depending on the exchange configuration.
+-- Not all exchanges use a routing key ­ refer to the specific exchange documentation.
+type RoutingKey = Text
+
 -- | A record that contains the fields needed when creating a new queue using 'declareQueue'. The default values apply when you use 'newQueue'.
 data QueueOpts = QueueOpts
-    { queueName       :: Text
+    { queueName       :: QueueName
       -- ^ (default \"\"); the name of the queue; if left empty,
       -- the server will generate a new name and return it from the 'declareQueue' method
     , queuePassive    :: Bool
@@ -225,7 +238,7 @@ data QueueOpts = QueueOpts
       -- ^ (default 'False'); If set, the queue is deleted when all consumers have finished using it.
       -- Last consumer can be cancelled either explicitly or because its channel is closed.
       -- If there was no consumer ever on the queue, it won't be deleted.
-    , queueArguments :: FieldTable
+    , queueArguments  :: FieldTable
       -- ^ (default empty); A set of arguments for the declaration.
       -- The syntax and semantics of these arguments depends on the server implementation.
     }
@@ -259,12 +272,21 @@ declareQueue chan queue = do
     return (qName, fromIntegral messageCount, fromIntegral consumerCount)
 
 -- | @bindQueue chan queueName exchangeName routingKey@ binds the queue to the exchange using the provided routing key
-bindQueue :: Channel -> Text -> Text -> Text -> IO ()
+bindQueue :: Channel
+          -> QueueName -- ^ queue name
+          -> ExchangeName -- ^ exchange name; name of the exchange to bind to
+          -> RoutingKey -- ^ message routing key
+          -> IO ()
 bindQueue chan queueName exchangeName routingKey = do
     bindQueue' chan queueName exchangeName routingKey (FieldTable (M.fromList []))
 
 -- | an extended version of @bindQueue@ that allows you to include arbitrary arguments. This is useful to use the @headers@ exchange-type.
-bindQueue' :: Channel -> Text -> Text -> Text -> FieldTable -> IO ()
+bindQueue' :: Channel
+           -> QueueName -- ^ queue name
+           -> ExchangeName -- ^ exchange name; name of the exchange to bind to
+           -> RoutingKey -- ^ message routing key
+           -> FieldTable -- ^ arguments for binding
+           -> IO ()
 bindQueue' chan queueName exchangeName routingKey args = do
     (SimpleMethod Queue_bind_ok) <- request chan (SimpleMethod (Queue_bind
         1 -- ticket; ignored by rabbitMQ
@@ -277,7 +299,7 @@ bindQueue' chan queueName exchangeName routingKey args = do
     return ()
 
 -- | remove all messages from the queue; returns the number of messages that were in the queue
-purgeQueue :: Channel -> Text -> IO Word32
+purgeQueue :: Channel -> QueueName -> IO Word32
 purgeQueue chan queueName = do
     (SimpleMethod (Queue_purge_ok msgCount)) <- request chan $ (SimpleMethod (Queue_purge
         1 -- ticket
@@ -287,7 +309,7 @@ purgeQueue chan queueName = do
     return msgCount
 
 -- | deletes the queue; returns the number of messages that were in the queue before deletion
-deleteQueue :: Channel -> Text -> IO Word32
+deleteQueue :: Channel -> QueueName -> IO Word32
 deleteQueue chan queueName = do
     (SimpleMethod (Queue_delete_ok msgCount)) <- request chan $ (SimpleMethod (Queue_delete
         1 -- ticket
@@ -314,7 +336,11 @@ ackToBool NoAck = True
 --
 -- NOTE: The callback will be run on the same thread as the channel thread (every channel spawns its own thread to listen for incoming data) so DO NOT perform any request on @chan@ inside the callback (however, you CAN perform requests on other open channels inside the callback, though I wouldn't recommend it).
 -- Functions that can safely be called on @chan@ are 'ackMsg', 'ackEnv', 'rejectMsg', 'recoverMsgs'. If you want to perform anything more complex, it's a good idea to wrap it inside 'forkIO'.
-consumeMsgs :: Channel -> Text -> Ack -> ((Message,Envelope) -> IO ()) -> IO ConsumerTag
+consumeMsgs :: Channel
+            -> QueueName -- ^ Specifies the name of the queue to consume from.
+            -> Ack
+            -> ((Message,Envelope) -> IO ())
+            -> IO ConsumerTag
 consumeMsgs chan queueName ack callback = do
     --generate a new consumer tag
     newConsumerTag <- (fmap (T.pack . show)) $ modifyMVar (lastConsumerTag chan) $ \c -> return (c+1,c+1)
@@ -348,7 +374,11 @@ cancelConsumer chan consumerTag = do
 -- | @publishMsg chan exchangeName routingKey msg@ publishes @msg@ to the exchange with the provided @exchangeName@. The effect of @routingKey@ depends on the type of the exchange
 --
 -- NOTE: This method may temporarily block if the AMQP server requested us to stop sending content data (using the flow control mechanism). So don't rely on this method returning immediately
-publishMsg :: Channel -> Text -> Text -> Message -> IO ()
+publishMsg :: Channel
+           -> ExchangeName
+           -> RoutingKey
+           -> Message
+           -> IO ()
 publishMsg chan exchangeName routingKey msg = do
     writeAssembly chan (ContentMethod (Basic_publish
             1 -- ticket; ignored by rabbitMQ
@@ -379,7 +409,7 @@ publishMsg chan exchangeName routingKey msg = do
     return ()
 
 -- | @getMsg chan ack queueName@ gets a message from the specified queue. If @ack=='Ack'@, you have to call 'ackMsg' or 'ackEnv' for any message that you get, otherwise it might be delivered again in the future (by calling 'recoverMsgs')
-getMsg :: Channel -> Ack -> Text -> IO (Maybe (Message, Envelope))
+getMsg :: Channel -> Ack -> QueueName -> IO (Maybe (Message, Envelope))
 getMsg chan ack queueName = do
     ret <- request chan (SimpleMethod (Basic_get
         1 -- ticket
@@ -488,8 +518,8 @@ data Envelope = Envelope
               {
                 envDeliveryTag  :: LongLongInt,
                 envRedelivered  :: Bool,
-                envExchangeName :: Text,
-                envRoutingKey   :: Text,
+                envExchangeName :: ExchangeName,
+                envRoutingKey   :: RoutingKey,
                 envChannel      :: Channel
               }
 
@@ -617,12 +647,12 @@ connectionReceiver conn = do
 --
 -- > openConnection $ def { connectionVHost = \"example\" }
 data ConnectionOpts = ConnectionOpts
-    { connectionHost :: String -- ^ (default \"127.0.0.1\"); host name
-    , connectionPort :: PortNumber -- ^ (default 5672); port
-    , connectionVHost :: Text
+    { connectionHost     :: HostName -- ^ (default \"127.0.0.1\"); host name
+    , connectionPort     :: PortNumber -- ^ (default 5672); port
+    , connectionVHost    :: Text
       -- ^ (default \"/\"); @connectionVHost@ is used as a namespace for AMQP resources,
       -- so different applications could use multiple virtual hosts on the same AMQP server.
-    , connectionUser :: Text   -- ^ (default \"guest\"); user name
+    , connectionUser     :: Text   -- ^ (default \"guest\"); user name
     , connectionPassword :: Text -- ^ (default \"guest\"); password
     } deriving (Show, Eq)
 

@@ -1,7 +1,9 @@
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE DeriveDataTypeable  #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE DeriveDataTypeable    #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 -- |
@@ -57,6 +59,7 @@ module Network.AMQP (
     ConnectionOpts(..),
     openConnection,
     closeConnection,
+    withConnection,
     addConnectionClosedHandler,
 
     -- * Channel
@@ -116,25 +119,28 @@ module Network.AMQP (
 
 import           Data.Binary
 import           Data.Binary.Get
-import           Data.Binary.Put            as BPut
-import qualified Data.ByteString.Char8      as BS
-import qualified Data.ByteString.Lazy.Char8 as BL
+import           Data.Binary.Put             as BPut
+import qualified Data.ByteString.Char8       as BS
+import qualified Data.ByteString.Lazy.Char8  as BL
 import           Data.Default
-import qualified Data.Foldable              as F
-import qualified Data.IntMap                as IM
-import qualified Data.Map                   as M
+import qualified Data.Foldable               as F
+import qualified Data.IntMap                 as IM
+import qualified Data.Map                    as M
 import           Data.Maybe
-import qualified Data.Sequence              as Seq
-import           Data.Text                  (Text)
-import qualified Data.Text                  as T
+import qualified Data.Sequence               as Seq
+import           Data.Text                   (Text)
+import qualified Data.Text                   as T
 import           Data.Typeable
 
 import           Control.Concurrent
-import qualified Control.Exception          as CE
+import qualified Control.Exception           as CE
+import qualified Control.Exception.Lifted    as E
+import           Control.Monad.Base
+import           Control.Monad.Trans.Control
 
 import           Network.BSD
 import           Network.Socket
-import qualified Network.Socket.ByteString  as NB
+import qualified Network.Socket.ByteString   as NB
 
 import           Network.AMQP.Generated
 import           Network.AMQP.Helpers
@@ -771,6 +777,12 @@ closeConnection c = do
     -- wait for connection_close_ok by the server; this MVar gets filled in the CE.finally handler in openConnection'
     readMVar $ connClosedLock c
     return ()
+
+withConnection :: MonadBaseControl IO m
+               => ConnectionOpts
+               -> (Connection -> m a)
+               -> m a
+withConnection opts job = E.bracket (liftBase $ openConnection opts) (liftBase . closeConnection) job
 
 -- | @addConnectionClosedHandler conn ifClosed handler@ adds a @handler@ that will be called after the connection is closed (either by calling @closeConnection@ or by an exception). If the @ifClosed@ parameter is True and the connection is already closed, the handler will be called immediately. If @ifClosed == False@ and the connection is already closed, the handler will never be called
 addConnectionClosedHandler :: Connection -> Bool -> IO () -> IO ()

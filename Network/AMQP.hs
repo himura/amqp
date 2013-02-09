@@ -19,7 +19,7 @@
 -- >import qualified Data.ByteString.Lazy.Char8 as BL
 -- >
 -- >main = do
--- >    conn <- openConnection "127.0.0.1" "/" "guest" "guest"
+-- >    conn <- openConnection def { connectionHost = "mq.example.com" }
 -- >    chan <- openChannel conn
 -- >
 -- >    -- declare a queue, exchange and binding

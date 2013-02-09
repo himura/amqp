@@ -109,8 +109,9 @@ module Network.AMQP (
     flow,
 
     -- * Exceptions
-    AMQPException(..)
+    AMQPException(..),
 
+    def
 ) where
 
 import           Data.Binary

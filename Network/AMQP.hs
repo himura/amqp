@@ -148,24 +148,33 @@ TODO:
 
 -- | A record that contains the fields needed when creating a new exhange using 'declareExchange'. The default values apply when you use 'newExchange'.
 data ExchangeOpts = ExchangeOpts
-                {
-                    exchangeName       :: Text, -- ^ (must be set); the name of the exchange
-                    exchangeType       :: Text, -- ^ (must be set); the type of the exchange (\"fanout\", \"direct\", \"topic\", \"headers\")
+    { exchangeName       :: Text -- ^ (must be set); the name of the exchange
+    , exchangeType       :: Text -- ^ (must be set); the type of the exchange (\"fanout\", \"direct\", \"topic\", \"headers\")
 
-                    -- optional
-                    exchangePassive    :: Bool, -- ^ (default 'False'); If set, the server will not create the exchange. The client can use this to check whether an exchange exists without modifying the server state.
-                    exchangeDurable    :: Bool, -- ^ (default 'True'); If set when creating a new exchange, the exchange will be marked as durable. Durable exchanges remain active when a server restarts. Non-durable exchanges (transient exchanges) are purged if/when a server restarts.
-                    exchangeAutoDelete :: Bool, -- ^ (default 'False'); If set, the exchange is deleted when all queues have finished using it.
-                    exchangeInternal   :: Bool -- ^ (default 'False'); If set, the exchange may not be used directly by publishers, but only when bound to other exchanges. Internal exchanges are used to construct wiring that is not visible to applications.
-                }
-                deriving Show
+    -- optional
+    , exchangePassive    :: Bool
+      -- ^ (default 'False'); If set, the server will not create the exchange.
+      -- The client can use this to check whether an exchange exists without modifying the server state.
+    , exchangeDurable    :: Bool
+      -- ^ (default 'True'); If set when creating a new exchange, the exchange will be marked as durable.
+      -- Durable exchanges remain active when a server restarts. Non-durable exchanges (transient exchanges) are purged if/when a server restarts.
+    , exchangeAutoDelete :: Bool
+      -- ^ (default 'False'); If set, the exchange is deleted when all queues have finished using it.
+    , exchangeInternal   :: Bool
+      -- ^ (default 'False'); If set, the exchange may not be used directly by publishers, but only when bound to other exchanges.
+      -- Internal exchanges are used to construct wiring that is not visible to applications.
+    , exchangeArguments  :: FieldTable
+      -- ^ (default empty); A set of arguments for the declaration.
+      -- The syntax and semantics of these arguments depends on the server implementation.
+    }
+    deriving Show
 
 instance Default ExchangeOpts where
     def = newExchange
 
 -- | an 'ExchangeOpts' with defaults set; you must override at least the 'exchangeName' and 'exchangeType' fields.
 newExchange :: ExchangeOpts
-newExchange = ExchangeOpts "" "" False True False False
+newExchange = ExchangeOpts "" "" False True False False (FieldTable (M.fromList []))
 
 -- | declares a new exchange on the AMQP server. Can be used like this: @declareExchange channel newExchange {exchangeName = \"myExchange\", exchangeType = \"fanout\"}@
 declareExchange :: Channel -> ExchangeOpts -> IO ()
@@ -178,8 +187,8 @@ declareExchange chan exchg = do
         (exchangeDurable exchg) -- durable
         (exchangeAutoDelete exchg)  -- auto_delete
         (exchangeInternal exchg) -- internal
-        False -- nowait
-        (FieldTable (M.fromList [])))) -- arguments
+        False -- no-wait
+        (exchangeArguments exchg))) -- arguments
     return ()
 
 -- | deletes the exchange with the provided name
@@ -592,9 +601,7 @@ connectionReceiver conn = do
 -- Instead use 'def' and update it with record syntax.
 -- For example to connect to a vhost \"example\" running on localhost and listening to the default port:
 --
--- @
--- openConnection $ def { connectionVHost = \"example\" }
--- @
+-- > openConnection $ def { connectionVHost = \"example\" }
 data ConnectionOpts = ConnectionOpts
     { connectionHost :: String -- ^ (default \"127.0.0.1\"); host name
     , connectionPort :: PortNumber -- ^ (default 5672); port

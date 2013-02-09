@@ -1,0 +1,35 @@
+warming up
+estimating clock resolution...
+mean is 1.721603 us (320001 iterations)
+found 2006 outliers among 319999 samples (0.6%)
+  1775 (0.6%) high severe
+estimating cost of a clock call...
+mean is 627.8464 ns (14 iterations)
+found 3 outliers among 14 samples (21.4%)
+  1 (7.1%) high mild
+  2 (14.3%) high severe
+
+benchmarking pub/sub static message/small constant msg(100B) x 1000 msg
+collecting 100 samples, 1 iterations each, in estimated 31.94392 s
+mean: 186.9572 ms, lb 182.1263 ms, ub 195.8965 ms, ci 0.950
+std dev: 32.56767 ms, lb 21.52059 ms, ub 60.66257 ms, ci 0.950
+found 1 outliers among 100 samples (1.0%)
+  1 (1.0%) high severe
+variance introduced by outliers: 92.555%
+variance is severely inflated by outliers
+
+benchmarking pub/sub static message/small constant msg(1kB) x 1000 msg
+collecting 100 samples, 1 iterations each, in estimated 10.64939 s
+mean: 223.9174 ms, lb 213.9918 ms, ub 239.0079 ms, ci 0.950
+std dev: 61.83152 ms, lb 44.66460 ms, ub 106.3194 ms, ci 0.950
+found 1 outliers among 100 samples (1.0%)
+  1 (1.0%) high severe
+variance introduced by outliers: 96.807%
+variance is severely inflated by outliers
+
+benchmarking pub/sub static message/small constant msg(1MB) x 1000 msg
+collecting 100 samples, 1 iterations each, in estimated 120.3442 s
+mean: 1.499179 s, lb 1.465442 s, ub 1.534888 s, ci 0.950
+std dev: 178.4482 ms, lb 160.2847 ms, ub 201.2682 ms, ci 0.950
+variance introduced by outliers: 84.203%
+variance is severely inflated by outliers

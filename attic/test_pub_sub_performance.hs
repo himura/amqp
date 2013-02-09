@@ -50,11 +50,11 @@ msg1MB = L8.replicate (1000*1000) 'x'
 main :: IO ()
 main = do
     conf <- loadConfig "config.yml"
-    conn <- openConnection conf
-    defaultMain
-        [ bgroup "pub/sub static message"
-            [ bench "small constant msg(100B) x 1000 msg" $ nfIO (pubsubBS conn 1000 msg100B)
-            , bench "small constant msg(1kB) x 1000 msg" $ nfIO (pubsubBS conn 1000 msg1kB)
-            , bench "small constant msg(1MB) x 1000 msg" $ nfIO (pubsubBS conn 1000 msg1MB)
+    withConnection conf $ \conn ->
+        defaultMain
+            [ bgroup "pub/sub static message"
+                [ bench "small constant msg(100B) x 1000 msg" $ nfIO (pubsubBS conn 1000 msg100B)
+                , bench "small constant msg(1kB) x 1000 msg" $ nfIO (pubsubBS conn 1000 msg1kB)
+                , bench "small constant msg(1MB) x 1000 msg" $ nfIO (pubsubBS conn 1000 msg1MB)
+                ]
             ]
-        ]

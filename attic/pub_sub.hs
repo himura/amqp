@@ -16,12 +16,11 @@ main :: IO ()
 main = do
     (configFile:[]) <- getArgs
     conf <- loadConfig configFile
-    conn <- openConnection conf
-    quit <- newEmptyMVar
-    startConsume conn quit
-    loopPublish conn
-    takeMVar quit >> putStrLn "finished"
-    closeConnection conn
+    withConnection conf $ \conn -> do
+        quit <- newEmptyMVar
+        startConsume conn quit
+        loopPublish conn
+        takeMVar quit >> putStrLn "finished"
 
 loopPublish :: Connection -> IO ()
 loopPublish conn = do

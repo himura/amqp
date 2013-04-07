@@ -10,12 +10,13 @@ import           Data.Aeson
 import qualified Data.ByteString     as S
 import           Data.Maybe
 import qualified Data.Yaml           as Yaml
+import           Network
 import           Network.AMQP
 
 instance FromJSON ConnectionOpts where
     parseJSON (Object o) = ConnectionOpts
         <$> mb connectionHost "host"
-        <*> (fromMaybe (connectionPort def) <$> fmap fromInteger <$> o .:? "port")
+        <*> (fromMaybe (connectionPort def) <$> fmap (PortNumber . fromInteger) <$> o .:? "port")
         <*> mb connectionVHost "vhost"
         <*> mb connectionUser "user"
         <*> mb connectionPassword "password"

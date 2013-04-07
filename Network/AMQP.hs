@@ -120,7 +120,9 @@ module Network.AMQP (
 import           Data.Binary
 import           Data.Binary.Get
 import           Data.Binary.Put             as BPut
+import qualified Data.ByteString             as S
 import qualified Data.ByteString.Char8       as BS
+import qualified Data.ByteString.Lazy        as L
 import qualified Data.ByteString.Lazy.Char8  as BL
 import           Data.Default
 import qualified Data.Foldable               as F
@@ -138,10 +140,8 @@ import qualified Control.Exception.Lifted    as E
 import           Control.Monad.Base
 import           Control.Monad.Trans.Control
 
-import           Network.BSD
-import           Network.Socket
-import qualified Network.Socket.ByteString   as NB
-
+import           System.IO
+import           Network
 import           Network.AMQP.Generated
 import           Network.AMQP.Helpers
 import           Network.AMQP.Protocol
@@ -610,7 +610,7 @@ Outgoing Data: Application -> Socket
 -}
 
 data Connection = Connection {
-                    connSocket         :: Socket,
+                    connSocket         :: Handle,
                     connChannels       :: (MVar (IM.IntMap (Channel, ThreadId))), --open channels (channelID => (Channel, ChannelThread))
                     connMaxFrameSize   :: Int, --negotiated maximum frame size
                     connClosed         :: MVar (Maybe String),
@@ -655,18 +655,18 @@ connectionReceiver conn = do
 -- > openConnection $ def { connectionVHost = \"example\" }
 data ConnectionOpts = ConnectionOpts
     { connectionHost     :: HostName -- ^ (default \"127.0.0.1\"); host name
-    , connectionPort     :: PortNumber -- ^ (default 5672); port
+    , connectionPort     :: PortID -- ^ (default 5672); port
     , connectionVHost    :: Text
       -- ^ (default \"/\"); @connectionVHost@ is used as a namespace for AMQP resources,
       -- so different applications could use multiple virtual hosts on the same AMQP server.
     , connectionUser     :: Text   -- ^ (default \"guest\"); user name
     , connectionPassword :: Text -- ^ (default \"guest\"); password
-    } deriving (Show, Eq)
+    }
 
 instance Default ConnectionOpts where
     def = ConnectionOpts
           { connectionHost = "127.0.0.1"
-          , connectionPort = 5672
+          , connectionPort = PortNumber 5672
           , connectionVHost = "/"
           , connectionUser = "guest"
           , connectionPassword = "guest"
@@ -679,11 +679,9 @@ instance Default ConnectionOpts where
 -- NOTE: If the login name, password or virtual host are invalid, this method will throw a 'ConnectionClosedException'. The exception will not contain a reason why the connection was closed, so you'll have to find out yourself.
 openConnection :: ConnectionOpts -> IO Connection
 openConnection (ConnectionOpts host port vhost loginName loginPassword) = do
-    proto <- getProtocolNumber "tcp"
-    sock <- socket AF_INET Stream proto
-    addr <- inet_addr host
-    connect sock (SockAddrInet port addr)
-    NB.send sock $ toStrict $ BPut.runPut $ do
+    sock <- connectTo host port
+    hSetBinaryMode sock True
+    L.hPut sock $ BPut.runPut $ do
         BPut.putByteString $ BS.pack "AMQP"
         BPut.putWord8 0
         BPut.putWord8 0
@@ -725,7 +723,7 @@ openConnection (ConnectionOpts host port vhost loginName loginPassword) = do
     forkIO $ CE.finally (connectionReceiver conn)
             (do
                 -- try closing socket
-                CE.catch (sClose sock) (\(e::CE.SomeException) -> return ())
+                CE.catch (hClose sock) (\(e::CE.SomeException) -> return ())
 
                 -- mark as closed
                 modifyMVar_ cClosed $ \x -> return $ Just $ maybe "closed" id x
@@ -795,7 +793,7 @@ addConnectionClosedHandler conn ifClosed handler = do
             -- otherwise add it to the list
             _ -> modifyMVar_ (connClosedHandlers conn) $ \old -> return $ handler:old
 
-readFrameSock :: Socket -> Int -> IO Frame
+readFrameSock :: Handle -> Int -> IO Frame
 readFrameSock sock maxFrameSize = do
     dat <- recvExact 7
     let len = fromIntegral $ peekFrameSize dat
@@ -814,7 +812,7 @@ readFrameSock sock maxFrameSize = do
             then error $ "recvExact wanted "++show bytes++" bytes; got "++show (fromIntegral $ BL.length b)++" bytes"
             else return b
     recvExact' bytes buf = do
-        dat <- NB.recv sock bytes
+        dat <- S.hGet sock bytes
         let len = BS.length dat
         if len == 0
             then CE.throwIO $ ConnectionClosedException "recv returned 0 bytes"
@@ -824,14 +822,12 @@ readFrameSock sock maxFrameSize = do
                     then return buf'
                     else recvExact' (bytes-len) buf'
 
-writeFrameSock :: Socket -> Frame -> IO ()
+writeFrameSock :: Handle -> Frame -> IO ()
 writeFrameSock sock x = do
     f $ toStrict $ runPut $ put x
   where
     f x | BS.length x == 0 = return ()
-    f x = do
-        sent <- NB.send sock x
-        f $ BS.drop sent x
+    f x = S.hPut sock x
 
 ------------------------ CHANNEL -----------------------------
 

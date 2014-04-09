@@ -53,6 +53,7 @@ data Message = Message {
                 msgReplyTo :: Maybe Text,
                 msgCorrelationID :: Maybe Text,
                 msgHeaders :: Maybe FieldTable,
+                msgPriority :: Maybe Octet,
                 msgExpiration :: Maybe Text
                 }
     deriving (Eq, Ord, Read, Show)
@@ -450,13 +451,13 @@ data Channel = Channel {
                 }
 
 msgFromContentHeaderProperties :: ContentHeaderProperties -> BL.ByteString -> Message
-msgFromContentHeaderProperties (CHBasic content_type _ headers delivery_mode _ correlation_id reply_to expiration message_id timestamp _ _ _ _) body =
+msgFromContentHeaderProperties (CHBasic content_type _ headers delivery_mode priority correlation_id reply_to expiration message_id timestamp _ _ _ _) body =
     let msgId = fromShortString message_id
         contentType = fromShortString content_type
         replyTo = fromShortString reply_to
         correlationID = fromShortString correlation_id
         expire = fromShortString expiration
-    in Message body (fmap intToDeliveryMode delivery_mode) timestamp msgId contentType replyTo correlationID headers expire
+    in Message body (fmap intToDeliveryMode delivery_mode) timestamp msgId contentType replyTo correlationID headers priority expire
   where
     fromShortString (Just (ShortString s)) = Just s
     fromShortString _ = Nothing

@@ -326,7 +326,7 @@ deleteQueue chan queue = do
 
 -- | a 'Msg' with defaults set; you should override at least 'msgBody'
 newMsg :: Message
-newMsg = Message (BL.empty) Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+newMsg = Message (BL.empty) Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
 type ConsumerTag = Text
 
@@ -403,7 +403,7 @@ publishMsg' chan exchange routingKey mandatory msg = do
             Nothing
             (fmap ShortString $ msgCorrelationID msg)
             (fmap ShortString $ msgReplyTo msg)
-            Nothing
+            (fmap ShortString $ msgExpiration msg)
             (fmap ShortString $ msgID msg)
             (msgTimestamp msg)
             Nothing
